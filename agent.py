@@ -41,15 +41,17 @@ should_update_monitors = False
 should_update_threshold = False
 
 # To monitor the exchange rates
-@alice.on_interval(period=1.0)
+@alice.on_interval(period=10.0)
 async def monitor_exchange_rates(ctx: Context):
-    if not should_ask_for_exchange_rates:
-        monitor_base = ctx.storage.get('monitor_base') 
-        monitor_target = ctx.storage.get('monitor_target')
 
+    # code to send the monitor data
+    monitor_base = ctx.storage.get('monitor_base') 
+    monitor_target = ctx.storage.get('monitor_target')
+
+    if monitor_base and monitor_target:
         result = client.latest(base_currency=monitor_base, currencies=monitor_target)
         data = result['data']
-        return await manager.send_agent_message({
+        await manager.send_agent_message({
             "data" : data,
             "event": "check_exchange"
         })
@@ -58,6 +60,43 @@ async def monitor_exchange_rates(ctx: Context):
         # TODO: Sending alerts for comparisons will also be a part of this.
         pass
 
+    # code to send alerts incase of threshold breach
+    try: # nested in try block to prevent typecasting errors
+        threshold_base = ctx.storage.get('threshold_base')
+        base_value = float(ctx.storage.get('threshold_base_value'))
+        threshold_target = ctx.storage.get('threshold_target')
+        target_value = float(ctx.storage.get('threshold_target_value'))
+        operation = ctx.storage.get('operation')
+
+        if threshold_base and base_value and threshold_target and target_value and operation:
+
+            result = client.latest(base_currency=threshold_base, currencies=[threshold_target])
+            current_value = float(result['data'][threshold_target])
+            send_alert = False
+            alert_data = {
+                    "operation":operation,
+                    "current_value":current_value,
+                    "threshold_value":target_value
+                }
+            if operation=='-1' and (base_value*current_value)<target_value:
+                # minimum threshold reached
+                send_alert = True
+            elif operation=='0' and (base_value*current_value)==target_value:
+                #equal threshold reached
+                send_alert = True
+            elif operation=='1' and (base_value*current_value)>target_value:
+                #maximum threshold reached
+                send_alert = True
+
+            if send_alert:
+                await manager.send_agent_message({
+                    "data":alert_data,
+                    "event":"threshold_alert"
+                })
+        else:
+            pass
+    except:
+        pass
 
 # To monitor update the monitors
 @alice.on_interval(period=1.0)
