@@ -41,7 +41,10 @@ should_update_monitors = False
 @alice.on_interval(period=1.0)
 async def monitor_exchange_rates(ctx: Context):
     if not should_ask_for_exchange_rates:
-        return
+        return await manager.send_agent_message({
+            # "data" : some_data_variable
+            "event": "check_exchange"
+        })
     else:
         # TODO: call the api function to get the data and then send it out.
         # TODO: Sending alerts for comparisons will also be a part of this.
