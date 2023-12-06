@@ -2,11 +2,14 @@ from uagents import Context, Agent, Model
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 import uvicorn
 import json
+import freecurrencyapi
 
 alice = Agent(name="Rishi", seed="alice recovery phrase")
 
 app = FastAPI()
 
+API_KEY='fca_live_X2sxe8aAg55RJgBo1yvUG5jGKEf0rQbrdXWjzsWZ'
+client = freecurrencyapi.Client(api_key=API_KEY)
 
 class EmptyMessage(Model):
     message: str
@@ -35,14 +38,19 @@ manager = ConnectionManager()
 
 should_ask_for_exchange_rates = False
 should_update_monitors = False
-
+should_update_threshold = False
 
 # To monitor the exchange rates
 @alice.on_interval(period=1.0)
 async def monitor_exchange_rates(ctx: Context):
     if not should_ask_for_exchange_rates:
+        monitor_base = ctx.storage.get('monitor_base') 
+        monitor_target = ctx.storage.get('monitor_target')
+
+        result = client.latest(base_currency=monitor_base, currencies=monitor_target)
+        data = result['data']
         return await manager.send_agent_message({
-            # "data" : some_data_variable
+            "data" : data,
             "event": "check_exchange"
         })
     else:
