@@ -39,6 +39,8 @@ manager = ConnectionManager()
 should_ask_for_exchange_rates = False
 should_update_monitors = False
 should_update_threshold = False
+monitor_json = {}
+threshold_json = {}
 
 # To monitor the exchange rates
 @alice.on_interval(period=10.0)
@@ -75,7 +77,7 @@ async def monitor_exchange_rates(ctx: Context):
             send_alert = False
             alert_data = {
                     "operation":operation,
-                    "current_value":current_value,
+                    "current_value":base_value*current_value,
                     "threshold_value":target_value
                 }
             if operation=='-1' and (base_value*current_value)<target_value:
@@ -101,17 +103,31 @@ async def monitor_exchange_rates(ctx: Context):
 # To monitor update the monitors
 @alice.on_interval(period=1.0)
 async def update_monitors(ctx: Context):
-    if not should_update_monitors:
-        return
+    if should_update_monitors and monitor_json:
+        ctx.storage.set('monitor_base', monitor_json['monitor_base'])
+        ctx.storage.set('monitor_target', monitor_json['monitor_target'])
+
     else:
         # TODO: call the api function to set the data and then send it out.
         pass
+
+@alice.on_interval(period=1.0)
+async def update_threshold(ctx:Context):
+    if should_update_threshold and threshold_json:
+        ctx.storage.set('threshold_base', threshold_json['threshold_base'])
+        ctx.storage.set('base_value', threshold_json['base_value'])
+        ctx.storage.set('threshold_target', threshold_json['threshold_target'])
+        ctx.storage.set('target_value', threshold_json['target_value'])
+        ctx.storage.set('operation', threshold_json['operation'])
 
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     global should_ask_for_exchange_rates
     global should_update_monitors
+    global should_update_threshold
+    global monitor_json
+    global threshold_json
     await manager.connect(websocket)
     try:
         while True:
@@ -129,9 +145,17 @@ async def websocket_endpoint(websocket: WebSocket):
                 print(f"after sending: {should_ask_for_exchange_rates}")
             elif event == "update_monitors":
                 should_update_monitors = True
+                monitor_json = json.loads(data['text'])['monitor']
                 await manager.send_agent_message({
                     # TODO: Change the response to the actual data.
                     "should_update": should_update_monitors
+                })
+            elif event == "update_threshold":
+                should_update_threshold = True
+                threshold_json = json.loads(data['text'])['threshold']
+                await manager.send_agent_message({
+                    # TODO: Change the response to the actual data.
+                    "should_update": should_update_threshold
                 })
             else:
                 pass
